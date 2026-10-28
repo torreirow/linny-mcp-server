@@ -27,4 +27,4 @@ git merge upstream/main   # on main
 
 | Topic branch | Merged in main | Upstream PR | Description |
 |--------------|----------------|-------------|-------------|
-| –            | –              | –           | None yet    |
+| `spec/notebook-yml` | yes | – | Spec 0.4.0 draft: optional `lindenConfig/notebook.yml` (taxonomy list, archive policy) |
