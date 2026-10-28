@@ -1,8 +1,8 @@
 # Linden Index Specification
 
-- **Version:** 0.3.0
+- **Version:** 0.4.0
 - **Status:** Draft (alpha). Normative for the `linny-mcp` PoC indexer.
-- **Date:** 2026-08-20
+- **Date:** 2026-10-28
 - **Editor of record:** Pim Snel (Linden Project)
 - **Supersedes (in spirit):** Linden Specification 0.2.0; see §11 and §12.
 
@@ -106,6 +106,7 @@ YAML at the top of each record. Observed keys in the reference notebook:
 | `title`   | string  | Display title. **Gates** inclusion in the props/title indexes (§8.3, §8.4). |
 | `crdate`  | string  | Creation date, quoted `"YYYY-MM-DD"`. A plain string, **not** a Hugo `date`. |
 | `starred` | boolean | Marks the document as a favourite (§8.2). |
+| `archive` | boolean | Marks the document as archived. The field name is configurable and clients may hide archived documents; indexers never drop them (§5.4). |
 | taxonomy keys | scalar or list | Any key that names a taxonomy (e.g. `tags`, `customer`, `project`, `type`, `subject`) declares membership. A scalar is one term; a list is many. Term text is lowercased when used as an index key. |
 
 New documents created through a client are pre-populated with `title`,
@@ -125,8 +126,8 @@ The `lindenConfig/` directory (Hugo `dataDir`; resolved by `linny.vim` as
 metadata**. The **list of taxonomies itself** is a notebook-level setting (in the Hugo
 template it lives in Hugo's own `config.yaml` `taxonomies:` map, e.g.
 `tag → tags`, `project → projects`, `customer → customer`, `type → type`,
-`subject → subject`). A standalone indexer SHOULD read the taxonomy list from an
-explicit notebook config; see §13-Q6.
+`subject → subject`). A standalone indexer SHALL read the taxonomy list from
+`lindenConfig/notebook.yml` when that file declares one (§5.4, resolving §13-Q6).
 
 ### 5.1 L1 taxonomy config: `L1-CONF-TAX-<taxonomy>.yml`
 
@@ -153,6 +154,44 @@ L1 index** (§9.1). A term with `starred: true` appears in
 (`starred_documents`, `starred_terms`, `starred_taxonomies`, `all_taxonomies`,
 `recently_modified_documents`, `menu`). They are client configuration, **not** index
 files, and are out of scope for the indexer.
+
+### 5.4 Notebook config: `notebook.yml` (optional, since 0.4.0)
+
+Notebook-wide settings that are policy for the notebook as a whole, not per user or per
+client. The file is optional, and so is every key in it: when the file or a key is
+absent, indexers and clients behave exactly as in 0.3.0.
+
+```yaml
+# lindenConfig/notebook.yml
+taxonomies: [tag, project, customer, subject, owner, type, doctype]
+archive:
+  field: archive         # front-matter key that marks a document archived
+  default_hidden: true   # clients hide archived documents by default
+```
+
+| Key                      | Type            | Default   | Meaning |
+|--------------------------|-----------------|-----------|---------|
+| `taxonomies`             | list of strings | (none)    | The notebook's taxonomies. Each entry is both the front-matter key and the taxonomy key in the index (`_index_taxonomies.json`, `<taxonomy>/`). |
+| `archive.field`          | string          | `archive` | Front-matter key that marks a document archived. |
+| `archive.default_hidden` | boolean         | `false`   | Whether clients hide archived documents by default. |
+
+**Taxonomies.** When `taxonomies` is present, a standalone indexer SHALL treat exactly
+those names as taxonomies. The Hugo reference indexer keeps reading its own site
+`config.yaml`; a notebook that uses both SHOULD keep the two lists equal, or
+`verify --hugo` reports drift.
+
+**Archive.** A document is archived when its front-matter value for `archive.field` is
+the YAML boolean `true`. Any other value, including the string `"true"`, does not
+archive it.
+
+- Indexers SHALL NOT omit archived documents from any index file. The index stays
+  complete; `_index_docs_with_props.json` (§8.3) already carries the field, which is
+  all a client needs to filter.
+- When `default_hidden` is `true`, clients SHOULD hide archived documents from document
+  listings (term listings, starred documents, recent documents) by default, and SHOULD
+  offer a way to show them. How is up to the client.
+- Opening an archived document directly (by path, link or search) is unaffected.
+- Archived **terms** (L2 config `archive: true`, §5.2) are unrelated to this setting.
 
 ---
 
@@ -394,7 +433,7 @@ degraded.
 
 ## 13. Open questions
 
-These are surfaced deliberately; they are **not** decided in v0.3.0.
+These are surfaced deliberately; they are **not** decided unless marked RESOLVED.
 
 - **Q1. Nested vs. flat filenames.** Nested (`<tax>/index.json`) is normative because
   the live client reads it. Confirm this is permanent, or require emitting both the
@@ -410,9 +449,10 @@ These are surfaced deliberately; they are **not** decided in v0.3.0.
   `has_many` vs `has_many_belong_to_many`).
 - **Q5. Task-count regex.** Must a task marker be at line start? Is uppercase `[X]`
   a closed task? The Hugo and lindex regexes differ subtly.
-- **Q6. Source of the taxonomy list.** Hugo takes it from its own site config; a
-  standalone indexer needs an explicit notebook-level taxonomy declaration (the old
-  `L0-CONF-ROOT.yml` was removed in spec 0.2.0). Define where the taxonomy list lives.
+- **Q6. Source of the taxonomy list. (RESOLVED in 0.4.0.)** Hugo takes it from its own
+  site config; a standalone indexer needs an explicit notebook-level taxonomy
+  declaration (the old `L0-CONF-ROOT.yml` was removed in spec 0.2.0). The list lives
+  in `lindenConfig/notebook.yml` under `taxonomies` (§5.4).
 - **Q7. Filename-derived identifiers. (RESOLVED.)** All config-derived identifiers
   use one convention: lindenConfig files are named with the **singular** taxonomy
   name, and both the L1 term-config lookup (`L2-CONF-TAX-<singular>-TRM-<term>`, §9.1)
@@ -438,7 +478,8 @@ These are surfaced deliberately; they are **not** decided in v0.3.0.
 | 0.2.0   | Removed L0 configuration; added `starred` to L1 config (website). Flat index layout. |
 | (0.2.1) | Lindex code only: added `_index_docs_tasks_count`. Never written into the spec. |
 | (none)  | 2021 Hugo/"Carl" port redesigned index files (nested layout); never folded back into the spec (per "Project Reboot", 2021-04-29). |
-| **0.3.0** | **This document.** Folds the Hugo redesign back into the spec: nested L1/L2 layout normative, home-level files documented as emitted today, deprecations and ambiguities recorded, `$FORMAT`/`$INCLUDE` correction. |
+| 0.3.0   | Folds the Hugo redesign back into the spec: nested L1/L2 layout normative, home-level files documented as emitted today, deprecations and ambiguities recorded, `$FORMAT`/`$INCLUDE` correction. |
+| **0.4.0** | **This document.** Optional `lindenConfig/notebook.yml` (§5.4): taxonomy list (resolves Q6) and archive policy for documents. Without the file, 0.3.0 behaviour. |
 
 ---
 

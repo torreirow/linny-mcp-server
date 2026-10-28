@@ -6,6 +6,13 @@ semantic versioning once it leaves alpha.
 
 ## [Unreleased]
 
+### Added
+- **Linden Index Specification 0.4.0 (draft)**: optional `lindenConfig/notebook.yml`
+  (§5.4). It declares the notebook's taxonomy list, which resolves open question Q6,
+  and an archive policy for documents: which front-matter field marks a document
+  archived and whether clients hide archived documents by default. Indexers keep
+  archived documents in every index file. Without the file, 0.3.0 behaviour.
+
 ## [0.2.0] - 2026-09-18
 
 ### Added
