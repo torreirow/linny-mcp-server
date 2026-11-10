@@ -14,7 +14,7 @@
 
 | Tool | Arguments | Returns |
 |-------------------|--------------------------------------|------------------------------------------------|
-| `search`          | `query: string`, `limit?: int`       | `hits: [{filename, title, snippet, score}]`; FTS5, bm25-ranked, redacted snippets |
+| `search`          | `query: string`, `limit?: int`       | `hits: [{filename, title, snippet, score}]`; FTS5 (invalid syntax retried as literal text), bm25-ranked, redacted snippets |
 | `get_doc`         | `slug: string`                       | `{found, filename, title, props, body}`; redacted; `found:false` when denied/missing |
 | `list_taxonomies` | none                                 | `{taxonomies: [string]}`; only taxonomies with a readable document |
 | `terms`           | `taxonomy: string`                   | `{terms: [string]}`; only terms with a readable document |
