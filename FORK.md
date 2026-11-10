@@ -28,3 +28,4 @@ git merge upstream/main   # on main
 | Topic branch | Merged in main | Upstream PR | Description |
 |--------------|----------------|-------------|-------------|
 | `spec/notebook-yml` | yes | – | Spec 0.4.0 draft: optional `lindenConfig/notebook.yml` (taxonomy list, archive policy) |
+| `feat/archive-field` | yes | – | `archive` tool writes `archive.field` from `notebook.yml` (stacked on `spec/notebook-yml`) |
