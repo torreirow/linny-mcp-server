@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
 // The scoped query variants apply authorization as a SQL predicate: the caller
@@ -42,6 +43,22 @@ func (s *Store) SearchScoped(query string, limit int, readableSubquery string, s
 		hits = append(hits, h)
 	}
 	return hits, rows.Err()
+}
+
+// ExcludeArchived narrows a readable subquery to the documents whose front
+// matter does not set field to the YAML boolean true (spec §5.4: any other value,
+// including the string "true", does not archive). The result is again a readable
+// subquery, so every scoped query accepts it unchanged. A field containing a
+// double quote cannot be addressed as a JSON path and leaves the subquery as is.
+func ExcludeArchived(readableSubquery string, subArgs []any, field string) (string, []any) {
+	if field == "" || strings.Contains(field, `"`) {
+		return readableSubquery, subArgs
+	}
+	args := make([]any, 0, len(subArgs)+1)
+	args = append(args, subArgs...)
+	args = append(args, `$."`+field+`"`)
+	return `SELECT filename FROM docs WHERE filename IN (` + readableSubquery + `)
+		 AND json_type(props_json, ?) IS NOT 'true'`, args
 }
 
 // DocsByTermScoped returns the readable filenames tagged (taxonomy, term).

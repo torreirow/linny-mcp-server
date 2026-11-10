@@ -28,7 +28,7 @@ func starredFixture(t *testing.T, scopes ...string) *writeFixture {
 
 func (f *writeFixture) starred(t *testing.T) starredDocsOut {
 	t.Helper()
-	_, out, err := f.w.reader().starredDocs(context.Background(), nil, emptyIn{})
+	_, out, err := f.w.reader().starredDocs(context.Background(), nil, starredDocsIn{})
 	if err != nil {
 		t.Fatalf("starred_docs: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestStarredDocsDenyByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := newWriter(f.server, ss, "tester")
-	_, out, err := w.reader().starredDocs(context.Background(), nil, emptyIn{})
+	_, out, err := w.reader().starredDocs(context.Background(), nil, starredDocsIn{})
 	if err != nil {
 		t.Fatal(err)
 	}
