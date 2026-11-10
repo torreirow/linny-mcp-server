@@ -14,12 +14,18 @@
 
 | Tool | Arguments | Returns |
 |-------------------|--------------------------------------|------------------------------------------------|
-| `search`          | `query: string`, `limit?: int`       | `hits: [{filename, title, snippet, score}]`; FTS5 (invalid syntax retried as literal text), bm25-ranked, redacted snippets |
+| `search`          | `query: string`, `limit?: int`, `include_archived?: bool` | `hits: [{filename, title, snippet, score}]`; FTS5 (invalid syntax retried as literal text), bm25-ranked, redacted snippets |
 | `get_doc`         | `slug: string`                       | `{found, filename, title, props, body}`; redacted; `found:false` when denied/missing |
 | `list_taxonomies` | none                                 | `{taxonomies: [string]}`; only taxonomies with a readable document |
 | `terms`           | `taxonomy: string`                   | `{terms: [string]}`; only terms with a readable document |
-| `docs_by_term`    | `taxonomy: string`, `term: string`   | `{docs: [filename]}`; readable members only |
-| `starred_docs`    | none                                 | `{docs: [{filename, title}], scope_filtered}`; ordered by title |
+| `docs_by_term`    | `taxonomy: string`, `term: string`, `include_archived?: bool` | `{docs: [filename]}`; readable members only |
+| `starred_docs`    | `include_archived?: bool`            | `{docs: [{filename, title}], scope_filtered}`; ordered by title |
+
+**Archived documents.** When `lindenConfig/notebook.yml` sets
+`archive.default_hidden: true` (spec §5.4), `search`, `docs_by_term`, `starred_docs`
+and `changed_since` leave out documents whose `archive.field` (default `archive`) is
+the boolean `true`; `include_archived: true` lists them too. `get_doc`, `history` and
+`diff` are unaffected, and so is every notebook without that setting.
 
 ## History (v1, shipped)
 
@@ -30,7 +36,7 @@ not-found) and redact free-text output (commit subjects, diff hunks).
 |------------------|--------------------------------------|------------------------------------------------|
 | `history`        | `slug: string`, `limit?: int`        | `{found, commits: [{hash, author, date, subject}]}`; newest first |
 | `diff`           | `slug: string`, `ref: string`        | `{found, diff}`; ref-vs-working diff; `ref` must not begin with `-` |
-| `changed_since`  | `since: string`                      | `{docs: [slug]}`; changed & readable; `since` must not begin with `-` |
+| `changed_since`  | `since: string`, `include_archived?: bool` | `{docs: [slug]}`; changed & readable; `since` must not begin with `-` |
 
 ## Write (v1, shipped)
 

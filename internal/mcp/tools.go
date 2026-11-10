@@ -64,6 +64,21 @@ func (rd *reader) readable(slug string) (bool, error) {
 	return ok, err
 }
 
+// listScope is the readable subquery for document listings. When the notebook's
+// notebook.yml sets archive.default_hidden, archived documents are left out
+// unless includeArchived is set (spec §5.4). get_doc, history and diff keep the
+// plain scope: opening a document directly is unaffected by the archive.
+func (rd *reader) listScope(includeArchived bool) (string, []any) {
+	if includeArchived || rd.corpusPath == "" {
+		return rd.scopeSQL, rd.scopeArgs
+	}
+	p := index.LoadArchivePolicy(rd.corpusPath)
+	if !p.Hidden {
+		return rd.scopeSQL, rd.scopeArgs
+	}
+	return index.ExcludeArchived(rd.scopeSQL, rd.scopeArgs, p.Field)
+}
+
 // buildToolServer returns an MCP server exposing the read tools bound to rd.
 func buildToolServer(rd *reader) *mcpsdk.Server {
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
@@ -73,7 +88,7 @@ func buildToolServer(rd *reader) *mcpsdk.Server {
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "search",
-		Description: "Full-text search the notebook; returns ranked snippets with titles.",
+		Description: "Full-text search the notebook; returns ranked snippets with titles. " + archivedNote,
 	}, rd.search)
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "get_doc",
@@ -89,7 +104,7 @@ func buildToolServer(rd *reader) *mcpsdk.Server {
 	}, rd.terms)
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "docs_by_term",
-		Description: "List the documents tagged with a given taxonomy term.",
+		Description: "List the documents tagged with a given taxonomy term. " + archivedNote,
 	}, rd.docsByTerm)
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
@@ -102,7 +117,7 @@ func buildToolServer(rd *reader) *mcpsdk.Server {
 	}, rd.diff)
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "changed_since",
-		Description: "List documents changed since a date or revision (readable ones only).",
+		Description: "List documents changed since a date or revision (readable ones only). " + archivedNote,
 	}, rd.changedSince)
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
@@ -113,7 +128,7 @@ func buildToolServer(rd *reader) *mcpsdk.Server {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name: "starred_docs",
 		Description: "List the documents flagged `starred: true` in front matter, with titles. " +
-			"Results reflect the caller's scopes, so the list may be partial.",
+			"Results reflect the caller's scopes, so the list may be partial. " + archivedNote,
 	}, rd.starredDocs)
 
 	if rd.corpusPath != "" && rd.store != nil {
@@ -137,11 +152,17 @@ func (rd *reader) syncStatusTool(_ context.Context, _ *mcpsdk.CallToolRequest, _
 	return nil, rd.syncStatus(), nil
 }
 
+// archivedNote ends the description of every listing tool that honours
+// archive.default_hidden.
+const archivedNote = "Archived documents are left out when the notebook hides them by default " +
+	"(lindenConfig/notebook.yml archive.default_hidden); pass include_archived to list them too."
+
 // --- tool input/output types (schemas are inferred from these) ---
 
 type searchIn struct {
-	Query string `json:"query" jsonschema:"the full-text query"`
-	Limit int    `json:"limit,omitempty" jsonschema:"maximum number of hits (default 20)"`
+	Query           string `json:"query" jsonschema:"the full-text query"`
+	Limit           int    `json:"limit,omitempty" jsonschema:"maximum number of hits (default 20)"`
+	IncludeArchived bool   `json:"include_archived,omitempty" jsonschema:"also list archived documents when the notebook hides them by default"`
 }
 type searchHit struct {
 	Filename string  `json:"filename"`
@@ -216,6 +237,10 @@ type sessionInfoOut struct {
 	Reason      string `json:"reason,omitempty"`
 }
 
+type starredDocsIn struct {
+	IncludeArchived bool `json:"include_archived,omitempty" jsonschema:"also list archived documents when the notebook hides them by default"`
+}
+
 type starredDocsOut struct {
 	Docs []index.DocRef `json:"docs"`
 	// ScopeFiltered is always true: a statement about the tool, not a measurement
@@ -236,8 +261,9 @@ type termsOut struct {
 }
 
 type docsByTermIn struct {
-	Taxonomy string `json:"taxonomy" jsonschema:"the taxonomy name"`
-	Term     string `json:"term" jsonschema:"the term within the taxonomy"`
+	Taxonomy        string `json:"taxonomy" jsonschema:"the taxonomy name"`
+	Term            string `json:"term" jsonschema:"the term within the taxonomy"`
+	IncludeArchived bool   `json:"include_archived,omitempty" jsonschema:"also list archived documents when the notebook hides them by default"`
 }
 type docsByTermOut struct {
 	Docs []string `json:"docs"`
@@ -246,7 +272,8 @@ type docsByTermOut struct {
 // --- handlers ---
 
 func (rd *reader) search(_ context.Context, _ *mcpsdk.CallToolRequest, in searchIn) (*mcpsdk.CallToolResult, searchOut, error) {
-	hits, err := rd.store.SearchScoped(in.Query, in.Limit, rd.scopeSQL, rd.scopeArgs)
+	scopeSQL, scopeArgs := rd.listScope(in.IncludeArchived)
+	hits, err := rd.store.SearchScoped(in.Query, in.Limit, scopeSQL, scopeArgs)
 	if err != nil {
 		return nil, searchOut{}, err
 	}
@@ -350,8 +377,9 @@ func writeVerdict(writesEnabled bool, st sessionStatusOut, ss *authz.ScopeSet) (
 	}
 }
 
-func (rd *reader) starredDocs(_ context.Context, _ *mcpsdk.CallToolRequest, _ emptyIn) (*mcpsdk.CallToolResult, starredDocsOut, error) {
-	docs, err := rd.store.StarredDocsScoped(rd.scopeSQL, rd.scopeArgs)
+func (rd *reader) starredDocs(_ context.Context, _ *mcpsdk.CallToolRequest, in starredDocsIn) (*mcpsdk.CallToolResult, starredDocsOut, error) {
+	scopeSQL, scopeArgs := rd.listScope(in.IncludeArchived)
+	docs, err := rd.store.StarredDocsScoped(scopeSQL, scopeArgs)
 	if err != nil {
 		return nil, starredDocsOut{}, err
 	}
@@ -380,7 +408,8 @@ func (rd *reader) terms(_ context.Context, _ *mcpsdk.CallToolRequest, in termsIn
 }
 
 func (rd *reader) docsByTerm(_ context.Context, _ *mcpsdk.CallToolRequest, in docsByTermIn) (*mcpsdk.CallToolResult, docsByTermOut, error) {
-	docs, err := rd.store.DocsByTermScoped(in.Taxonomy, in.Term, rd.scopeSQL, rd.scopeArgs)
+	scopeSQL, scopeArgs := rd.listScope(in.IncludeArchived)
+	docs, err := rd.store.DocsByTermScoped(in.Taxonomy, in.Term, scopeSQL, scopeArgs)
 	if err != nil {
 		return nil, docsByTermOut{}, err
 	}
@@ -408,7 +437,8 @@ type diffOut struct {
 }
 
 type changedSinceIn struct {
-	Since string `json:"since" jsonschema:"a date or revision (e.g. 2024-01-01); must not begin with '-'"`
+	Since           string `json:"since" jsonschema:"a date or revision (e.g. 2024-01-01); must not begin with '-'"`
+	IncludeArchived bool   `json:"include_archived,omitempty" jsonschema:"also list archived documents when the notebook hides them by default"`
 }
 type changedSinceOut struct {
 	Docs []string `json:"docs"`
@@ -455,6 +485,7 @@ func (rd *reader) changedSince(_ context.Context, _ *mcpsdk.CallToolRequest, in 
 	if err != nil {
 		return nil, changedSinceOut{}, err
 	}
+	scopeSQL, scopeArgs := rd.listScope(in.IncludeArchived)
 	out := changedSinceOut{Docs: []string{}}
 	seen := map[string]bool{}
 	prefix := contentDir + "/"
@@ -467,7 +498,7 @@ func (rd *reader) changedSince(_ context.Context, _ *mcpsdk.CallToolRequest, in 
 			continue
 		}
 		seen[slug] = true
-		ok, err := rd.readable(slug)
+		_, ok, err := rd.store.GetDocScoped(slug, scopeSQL, scopeArgs)
 		if err != nil {
 			return nil, changedSinceOut{}, err
 		}

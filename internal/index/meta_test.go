@@ -85,16 +85,18 @@ func write(t *testing.T, p, s string) {
 	}
 }
 
-func TestLoadArchiveField(t *testing.T) {
+func TestLoadArchivePolicy(t *testing.T) {
 	cases := []struct {
 		name     string
 		notebook *string // nil: no notebook.yml
-		want     string
+		want     ArchivePolicy
 	}{
-		{"no notebook.yml keeps the legacy field", nil, "archived"},
-		{"notebook.yml without archive.field uses the spec default", ptr("taxonomies: [tag]\n"), "archive"},
-		{"explicit archive.field", ptr("archive:\n  field: hidden\n"), "hidden"},
-		{"unparsable notebook.yml is treated as absent", ptr("archive: [\n"), "archived"},
+		{"no notebook.yml keeps the legacy field", nil, ArchivePolicy{Field: "archived"}},
+		{"notebook.yml without archive.field uses the spec default", ptr("taxonomies: [tag]\n"), ArchivePolicy{Field: "archive"}},
+		{"explicit archive.field", ptr("archive:\n  field: hidden\n"), ArchivePolicy{Field: "hidden"}},
+		{"default_hidden", ptr("archive:\n  default_hidden: true\n"), ArchivePolicy{Field: "archive", Hidden: true}},
+		{"field and default_hidden", ptr("archive:\n  field: gone\n  default_hidden: true\n"), ArchivePolicy{Field: "gone", Hidden: true}},
+		{"unparsable notebook.yml is treated as absent", ptr("archive: [\n"), ArchivePolicy{Field: "archived"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -103,8 +105,11 @@ func TestLoadArchiveField(t *testing.T) {
 			if c.notebook != nil {
 				write(t, filepath.Join(root, lindenConfigRel, "notebook.yml"), *c.notebook)
 			}
-			if got := LoadNotebookMeta(root).ArchiveField; got != c.want {
-				t.Fatalf("ArchiveField = %q, want %q", got, c.want)
+			if got := LoadArchivePolicy(root); got != c.want {
+				t.Fatalf("LoadArchivePolicy = %+v, want %+v", got, c.want)
+			}
+			if got := LoadNotebookMeta(root).ArchiveField; got != c.want.Field {
+				t.Fatalf("ArchiveField = %q, want %q", got, c.want.Field)
 			}
 		})
 	}

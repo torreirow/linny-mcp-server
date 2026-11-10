@@ -19,6 +19,11 @@ semantic versioning once it leaves alpha.
   the file exists without that key. Without the file it still sets `archived: true`.
   Until now a document archived through the MCP server was not archived for
   `linny.vim`, which writes `archive`.
+- **Listings hide archived documents when `notebook.yml` says so**: with
+  `archive.default_hidden: true`, `search`, `docs_by_term`, `starred_docs` and
+  `changed_since` leave out documents whose archive field is `true`, and take a new
+  `include_archived` argument to list them anyway. `get_doc`, `history` and `diff`
+  are unaffected. Without the setting nothing is hidden, as before.
 
 ### Fixed
 - **`search` no longer fails on ordinary text that is not FTS5 syntax.** A hyphenated

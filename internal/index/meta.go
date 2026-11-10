@@ -40,7 +40,7 @@ func LoadNotebookMeta(root string) NotebookMeta {
 	m := NotebookMeta{
 		Taxonomies:    make(map[string]bool, len(taxonomies)),
 		DeclaredTerms: make(map[string]map[string]bool, len(taxonomies)),
-		ArchiveField:  loadArchiveField(root),
+		ArchiveField:  LoadArchivePolicy(root).Field,
 	}
 	for _, tax := range taxonomies {
 		m.Taxonomies[tax] = true
@@ -56,26 +56,40 @@ func LoadNotebookMeta(root string) NotebookMeta {
 	return m
 }
 
-// loadArchiveField resolves the archive field from lindenConfig/notebook.yml. A
-// missing or unparsable file yields the legacy field, so notebooks without one
-// behave as before; a file without archive.field yields the spec default.
-func loadArchiveField(root string) string {
+// ArchivePolicy is the notebook's archive setting from lindenConfig/notebook.yml
+// (spec §5.4).
+type ArchivePolicy struct {
+	// Field is the front-matter key that marks a document archived.
+	Field string
+	// Hidden is archive.default_hidden: listings leave archived documents out
+	// unless the caller asks for them.
+	Hidden bool
+}
+
+// LoadArchivePolicy reads the archive policy of the corpus at root. A missing or
+// unparsable notebook.yml yields the legacy field and nothing hidden, so
+// notebooks without one behave as before; a file without archive.field yields
+// the spec default field.
+func LoadArchivePolicy(root string) ArchivePolicy {
+	legacy := ArchivePolicy{Field: legacyArchiveField}
 	b, err := os.ReadFile(filepath.Join(root, lindenConfigRel, notebookConfigName))
 	if err != nil {
-		return legacyArchiveField
+		return legacy
 	}
 	var nc struct {
 		Archive struct {
-			Field string `yaml:"field"`
+			Field         string `yaml:"field"`
+			DefaultHidden bool   `yaml:"default_hidden"`
 		} `yaml:"archive"`
 	}
 	if yaml.Unmarshal(b, &nc) != nil {
-		return legacyArchiveField
+		return legacy
 	}
-	if nc.Archive.Field == "" {
-		return specArchiveField
+	p := ArchivePolicy{Field: nc.Archive.Field, Hidden: nc.Archive.DefaultHidden}
+	if p.Field == "" {
+		p.Field = specArchiveField
 	}
-	return nc.Archive.Field
+	return p
 }
 
 // NormalizeTerm exposes the term normalization Build applies, so callers can
