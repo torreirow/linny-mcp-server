@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
 // SearchHit is one ranked full-text search result.
@@ -33,17 +34,56 @@ const defaultSearchLimit = 20
 
 // Search runs a full-text query over titles and bodies, returning results ranked
 // by FTS5 bm25 (best first) with a snippet from the body. A query that matches
-// nothing returns an empty slice and no error.
+// nothing returns an empty slice and no error. A query FTS5 rejects is retried
+// once as literal text (see searchWithFallback).
 func (s *Store) Search(query string, limit int) ([]SearchHit, error) {
 	if limit <= 0 {
 		limit = defaultSearchLimit
 	}
-	rows, err := s.db.Query(
-		`SELECT filename, title, snippet(docs_fts, 2, '[', ']', '…', 8), bm25(docs_fts)
-		 FROM docs_fts
-		 WHERE docs_fts MATCH ?
-		 ORDER BY bm25(docs_fts)
-		 LIMIT ?`, query, limit)
+	return searchWithFallback(query, func(q string) ([]SearchHit, error) {
+		return s.scanHits(
+			`SELECT filename, title, snippet(docs_fts, 2, '[', ']', '…', 8), bm25(docs_fts)
+			 FROM docs_fts
+			 WHERE docs_fts MATCH ?
+			 ORDER BY bm25(docs_fts)
+			 LIMIT ?`, q, limit)
+	})
+}
+
+// searchWithFallback runs query; when FTS5 rejects it (e.g. "Connector-test"
+// reads as a column filter) it retries once with literalQuery. A query that
+// already works is never rewritten, and if the retry fails too the original
+// error is returned.
+func searchWithFallback(query string, run func(string) ([]SearchHit, error)) ([]SearchHit, error) {
+	hits, err := run(query)
+	if err == nil {
+		return hits, nil
+	}
+	lit := literalQuery(query)
+	if lit == "" || lit == query {
+		return nil, err
+	}
+	if hits, litErr := run(lit); litErr == nil {
+		return hits, nil
+	}
+	return nil, err
+}
+
+// literalQuery turns free text into an FTS5 query without operators: every
+// whitespace-separated token becomes a quoted string (internal quotes doubled),
+// joined by spaces, i.e. an implicit AND of the tokens as phrases.
+func literalQuery(query string) string {
+	tokens := strings.Fields(query)
+	for i, t := range tokens {
+		tokens[i] = `"` + strings.ReplaceAll(t, `"`, `""`) + `"`
+	}
+	return strings.Join(tokens, " ")
+}
+
+// scanHits runs a search statement whose columns are filename, title, snippet
+// and bm25 score.
+func (s *Store) scanHits(stmt string, args ...any) ([]SearchHit, error) {
+	rows, err := s.db.Query(stmt, args...)
 	if err != nil {
 		return nil, err
 	}

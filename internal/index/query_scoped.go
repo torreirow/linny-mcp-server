@@ -17,31 +17,18 @@ func (s *Store) SearchScoped(query string, limit int, readableSubquery string, s
 	if limit <= 0 {
 		limit = defaultSearchLimit
 	}
-	args := make([]any, 0, len(subArgs)+2)
-	args = append(args, query)
-	args = append(args, subArgs...)
-	args = append(args, limit)
-
-	rows, err := s.db.Query(
-		`SELECT filename, title, snippet(docs_fts, 2, '[', ']', '…', 8), bm25(docs_fts)
-		 FROM docs_fts
-		 WHERE docs_fts MATCH ? AND docs_fts.filename IN (`+readableSubquery+`)
-		 ORDER BY bm25(docs_fts)
-		 LIMIT ?`, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	var hits []SearchHit
-	for rows.Next() {
-		var h SearchHit
-		if err := rows.Scan(&h.Filename, &h.Title, &h.Snippet, &h.Score); err != nil {
-			return nil, err
-		}
-		hits = append(hits, h)
-	}
-	return hits, rows.Err()
+	return searchWithFallback(query, func(q string) ([]SearchHit, error) {
+		args := make([]any, 0, len(subArgs)+2)
+		args = append(args, q)
+		args = append(args, subArgs...)
+		args = append(args, limit)
+		return s.scanHits(
+			`SELECT filename, title, snippet(docs_fts, 2, '[', ']', '…', 8), bm25(docs_fts)
+			 FROM docs_fts
+			 WHERE docs_fts MATCH ? AND docs_fts.filename IN (`+readableSubquery+`)
+			 ORDER BY bm25(docs_fts)
+			 LIMIT ?`, args...)
+	})
 }
 
 // DocsByTermScoped returns the readable filenames tagged (taxonomy, term).

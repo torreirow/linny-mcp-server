@@ -6,6 +6,12 @@ semantic versioning once it leaves alpha.
 
 ## [Unreleased]
 
+### Fixed
+- **`search` no longer fails on ordinary text that is not FTS5 syntax.** A hyphenated
+  word such as `Connector-test` returned `SQL logic error: no such column: test`. A
+  query FTS5 rejects is now retried once with every token quoted (implicit AND);
+  queries that already worked, including operators and prefixes, are unchanged.
+
 ## [0.2.0] - 2026-09-18
 
 ### Added

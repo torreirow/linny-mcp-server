@@ -165,3 +165,21 @@ func containsStr(s []string, v string) bool {
 	}
 	return false
 }
+
+// A hyphenated query is retried as literal text and still filtered in SQL.
+func TestSearchScopedHyphenatedFallsBack(t *testing.T) {
+	store := controlledStore(t)
+	sub, args := readSQL(t, "read:*", "deny:taxonomy:tags:health")
+
+	hits, err := store.SearchScoped("backup-notes", 10, sub, args)
+	if err != nil {
+		t.Fatalf("hyphenated scoped search errored: %v", err)
+	}
+	files := map[string]bool{}
+	for _, h := range hits {
+		files[h.Filename] = true
+	}
+	if !files["workonly.md"] || files["both.md"] || files["health.md"] {
+		t.Fatalf("scoped fallback search = %v, want only workonly.md", files)
+	}
+}
