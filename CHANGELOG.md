@@ -13,6 +13,13 @@ semantic versioning once it leaves alpha.
   archived and whether clients hide archived documents by default. Indexers keep
   archived documents in every index file. Without the file, 0.3.0 behaviour.
 
+### Changed
+- **`archive` tool honours `notebook.yml`**: it sets the field named by
+  `archive.field` in `lindenConfig/notebook.yml`, or the spec default `archive` when
+  the file exists without that key. Without the file it still sets `archived: true`.
+  Until now a document archived through the MCP server was not archived for
+  `linny.vim`, which writes `archive`.
+
 ## [0.2.0] - 2026-09-18
 
 ### Added

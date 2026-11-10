@@ -201,6 +201,35 @@ func TestArchiveSetsFlag(t *testing.T) {
 	}
 }
 
+func TestArchiveUsesNotebookField(t *testing.T) {
+	f := newWriteFixture(t, "read:*", "write:*")
+	if err := os.WriteFile(filepath.Join(f.root, "lindenConfig", "notebook.yml"),
+		[]byte("archive:\n  field: archive\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-qm", "notebook.yml"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = f.root
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=T", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=T", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	slug := firstReadableSlug(t, f.w.reader())
+	_, out, err := f.w.archive(context.Background(), nil, archiveIn{Slug: slug})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.OK {
+		t.Fatalf("archive failed: %+v", out)
+	}
+	b, _ := os.ReadFile(filepath.Join(f.root, "content", slug))
+	if !strings.Contains(string(b), "\narchive: true") || strings.Contains(string(b), "archived:") {
+		t.Fatalf("archive field from notebook.yml not used:\n%s", b)
+	}
+}
+
 func TestModifyForbiddenWithReadOnlyScope(t *testing.T) {
 	f := newWriteFixture(t, "read:*") // can read, cannot write
 	slug := firstReadableSlug(t, f.w.reader())

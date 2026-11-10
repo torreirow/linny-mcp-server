@@ -80,7 +80,7 @@ func registerWriteTools(srv *mcpsdk.Server, w *writer) {
 	}, w.unsetFrontMatter)
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "archive",
-		Description: "Archive a document (front-matter state transition, sets archived: true).",
+		Description: "Archive a document (front-matter state transition). Sets archived: true, or the field named by archive.field in lindenConfig/notebook.yml (default archive when that file exists).",
 	}, w.archive)
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name: "update_doc",
@@ -229,8 +229,9 @@ func (w *writer) unsetFrontMatter(_ context.Context, _ *mcpsdk.CallToolRequest, 
 }
 
 func (w *writer) archive(_ context.Context, _ *mcpsdk.CallToolRequest, in archiveIn) (*mcpsdk.CallToolResult, writeOut, error) {
+	field := w.notebookMeta().ArchiveField
 	return w.editFM("archive", in.Slug, func(m *yaml.Node) (bool, []string, error) {
-		return setMappingValue(m, "archived", boolNode(true)), nil, nil
+		return setMappingValue(m, field, boolNode(true)), nil, nil
 	})
 }
 
