@@ -30,3 +30,4 @@ git merge upstream/main   # on main
 | `spec/notebook-yml` | yes | – | Spec 0.4.0 draft: optional `lindenConfig/notebook.yml` (taxonomy list, archive policy) |
 | `feat/archive-field` | yes | – | `archive` tool writes `archive.field` from `notebook.yml` (stacked on `spec/notebook-yml`) |
 | `fix/search-literal-fallback` | yes | – | `search` retries a query FTS5 rejects (e.g. `Connector-test`) as quoted literal text |
+| `feat/archive-hidden` | yes | – | Listings hide archived documents when `notebook.yml` sets `archive.default_hidden`; `include_archived` lists them (stacked on `feat/archive-field`) |
