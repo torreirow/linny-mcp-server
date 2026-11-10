@@ -46,7 +46,7 @@ document's resulting term membership.
 | `update_doc`         | `slug`, `old`+`new` \| `body`, `base_hash?`, `allow_empty?` | `{ok, slug, membership}`; body only, front matter untouched |
 | `set_front_matter`   | `slug`, `key`, `value`                     | `{ok, slug, membership, new_terms?}`; order-preserving, typed |
 | `unset_front_matter` | `slug`, `key`                              | `{ok, slug, membership}` |
-| `archive`            | `slug`                                     | `{ok, slug, membership}`; sets `archived: true` |
+| `archive`            | `slug`                                     | `{ok, slug, membership}`; sets `archived: true`, or `<archive.field>: true` when `lindenConfig/notebook.yml` exists (default `archive`) |
 | `add_term`           | `slug`, `taxonomy`, `term`                 | `{ok, slug, membership, new_terms?}`; idempotent |
 | `remove_term`        | `slug`, `taxonomy`, `term`                 | `{ok, slug, membership}`; idempotent |
 

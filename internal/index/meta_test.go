@@ -84,3 +84,30 @@ func write(t *testing.T, p, s string) {
 		t.Fatal(err)
 	}
 }
+
+func TestLoadArchiveField(t *testing.T) {
+	cases := []struct {
+		name     string
+		notebook *string // nil: no notebook.yml
+		want     string
+	}{
+		{"no notebook.yml keeps the legacy field", nil, "archived"},
+		{"notebook.yml without archive.field uses the spec default", ptr("taxonomies: [tag]\n"), "archive"},
+		{"explicit archive.field", ptr("archive:\n  field: hidden\n"), "hidden"},
+		{"unparsable notebook.yml is treated as absent", ptr("archive: [\n"), "archived"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			mkdirAll(t, filepath.Join(root, lindenConfigRel))
+			if c.notebook != nil {
+				write(t, filepath.Join(root, lindenConfigRel, "notebook.yml"), *c.notebook)
+			}
+			if got := LoadNotebookMeta(root).ArchiveField; got != c.want {
+				t.Fatalf("ArchiveField = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func ptr(s string) *string { return &s }
